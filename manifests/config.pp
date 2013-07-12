@@ -1,3 +1,4 @@
+# Configure foreman
 class foreman::config {
   Cron {
     require     => User[$foreman::user],
@@ -5,11 +6,29 @@ class foreman::config {
     environment => "RAILS_ENV=${foreman::environment}",
   }
 
-  file {'/etc/foreman/settings.yaml':
+  concat_build {'foreman_settings':
+    order => ['*.yaml'],
+  }
+
+  concat_fragment {'foreman_settings+01-header.yaml':
     content => template('foreman/settings.yaml.erb'),
+  }
+
+  file {'/etc/foreman/settings.yaml':
+    source  => concat_output('foreman_settings'),
+    require => Concat_build['foreman_settings'],
     notify  => Class['foreman::service'],
-    owner   => $foreman::user,
-    require => User[$foreman::user],
+    owner   => 'root',
+    group   => $foreman::group,
+    mode    => '0640',
+  }
+
+  file { '/etc/foreman/database.yml':
+    owner   => 'root',
+    group   => $foreman::group,
+    mode    => '0640',
+    content => template('foreman/database.yml.erb'),
+    notify  => Class['foreman::service'],
   }
 
   case $::operatingsystem {
@@ -48,8 +67,9 @@ class foreman::config {
   }
 
   if $foreman::passenger  {
-    class{"foreman::config::passenger":
+    class{'foreman::config::passenger':
       listen_on_interface => $foreman::passenger_interface,
+      scl_prefix          => $foreman::passenger_scl,
     }
   }
 

@@ -1,7 +1,9 @@
+# Install the needed packages for foreman
 class foreman::install {
   if ! $foreman::custom_repo {
     foreman::install::repos { 'foreman':
-      repo => $foreman::repo
+      repo => $foreman::repo,
+      gpgcheck => $foreman::gpgcheck,
     }
   }
 
@@ -10,24 +12,30 @@ class foreman::install {
     default => Foreman::Install::Repos['foreman'],
   }
 
-  package {'foreman':
-    ensure  => present,
+  case $foreman::db_type {
+    sqlite: {
+      case $::operatingsystem {
+        Debian,Ubuntu: { $package = 'foreman-sqlite3' }
+        default:       { $package = 'foreman-sqlite' }
+      }
+    }
+    postgresql: {
+      $package = 'foreman-postgresql'
+    }
+    mysql: {
+      $package = 'foreman-mysql2'
+    }
+  }
+
+  package { $package:
+    ensure  => $foreman::version,
     require => $repo,
-    notify  => Class['foreman::service'],
   }
 
-  if $foreman::use_sqlite {
-    case $::operatingsystem {
-      Debian,Ubuntu: { $sqlite = 'foreman-sqlite3' }
-      default:       { $sqlite = 'foreman-sqlite' }
-    }
-
-    package {'foreman-sqlite3':
-      ensure  => present,
-      name    => $sqlite,
+  if $foreman::selinux or (str2bool($::selinux) and $foreman::selinux != false) {
+    package { 'foreman-selinux':
+      ensure  => $foreman::version,
       require => $repo,
-      notify  => [Class['foreman::service'], Package['foreman']],
     }
   }
-
 }
